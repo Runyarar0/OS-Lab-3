@@ -1,0 +1,239 @@
+/*
+Eyra Inez Anne-Marie Agbenu (47152026)
+Edward Ofosu Mensah (53322026)
+Stanley Tulani Ndlovu (55362026)
+Fadzai Zaranyika (65842026)
+Ruvarashe Sadya (46162026)
+Nyameye Awurama Ampomaa Obeng-Akuamoah (86312026)
+Diana Esther Runyararo Murungu (59662026)
+*/
+
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <unordered_map>
+#include <algorithm>
+#include <iomanip>
+#include <cstdlib>
+#include <ctime>
+#include <string>
+using namespace std;
+
+//structure to represent a page request
+struct Page {
+    int pageNumber; //which page of the job is it it  can be page 1 , 2 , 7 ,8 etc
+    bool valid;       //true when it is in memory false when it is not in memory
+    int frameNumber;  //the frame the page is currently in -1 for not in any frame
+};
+
+//structure to represent a job (process)
+struct Job {
+    int jobId; //the job number
+    string jobName; //the name of the job
+    int jobSize;//the total size of the job
+    int numPages; //number of pages after dividing by page size
+    vector<Page> pages; //page map table for this job
+};
+
+//function to display current memory frames
+void displayFrames(const vector<int>& frames) {
+    cout << "\nCurrent Frames: [ ";
+    for (int f : frames)
+        if (f == -1) cout << "- "; //means frame is empty
+        else cout << f << " ";//when frame is not empty
+    cout << "]" << endl;
+}
+
+//FIFO Page Replacement simulation
+void simulateFIFO(Job& job, int totalFrames, const vector<int>& pageRequests, int pageSize) {
+    cout << "\n ~(￣▽￣)~*= FIFO Simulation ~(￣▽￣)~*= \n";
+    vector<int> frames(totalFrames, -1);//initializing all the pages to have a page frame value of -1 to indicate that it is not assigned to any page frame
+    queue<int> fifoQueue;//using a queue to track the insertion order of pages
+    int pageFaults = 0; //to count the number of page faults
+
+    for (int page : pageRequests) {
+        //check if page already in memory if its not increase the page fault
+        if (find(frames.begin(), frames.end(), page) == frames.end()) {
+            //page fault must increase
+            pageFaults++;
+
+            int frameIndex = -1;//to store which frame this page goes into
+
+            //if all frames are occupied remove the page in the front of the 
+            //queue since it will be the one that has been there the longest
+            if ((int)fifoQueue.size() == totalFrames) {
+                int toRemove = fifoQueue.front(); //removing the oldest frame
+                fifoQueue.pop();
+                auto it = find(frames.begin(), frames.end(), toRemove);
+                if (it != frames.end()) {
+                    frameIndex = distance(frames.begin(), it);
+                    *it = page;
+                }
+            } else {
+                //the case where we have free frames, so just find an empty one (-1)
+                auto it = find(frames.begin(), frames.end(), -1);
+                if (it != frames.end()) {
+                    frameIndex = distance(frames.begin(), it);
+                    *it = page;
+                }
+            }
+
+            fifoQueue.push(page);//add the new page to the queue (newest one)
+
+            int physicalAddress = frameIndex * pageSize; //address resolution for this page
+            cout << "Page " << page << " caused a page fault.\n";
+            cout << "Now it is in memory at this starting address: " << physicalAddress << endl;
+        } else {
+            cout << "Page " << page << " found in memory ---> HIT\n";
+        }
+
+        displayFrames(frames);
+    }
+
+    //update page map table for the job
+    for (auto& p : job.pages) {
+        auto it = find(frames.begin(), frames.end(), p.pageNumber);
+        if (it != frames.end()) {
+            p.valid = true;
+            p.frameNumber = distance(frames.begin(), it);
+        } else {
+            p.valid = false;
+            p.frameNumber = -1;
+        }
+    }
+
+    cout << "\nTotal page faults using FIFO: " << pageFaults << endl;
+}
+
+//LRU Page Replacement simulation
+void simulateLRU(Job& job, int totalFrames, const vector<int>& pageRequests, int pageSize) {
+    cout << "\n＜（＾－＾）＞ LRU Simulation ＜（＾－＾）＞\n";
+    vector<int> frames(totalFrames, -1);//initializing all the pages to have a page frame value of -1
+    unordered_map<int, int> lastUsed;//to keep track of when each page was last used
+    int pageFaults = 0;
+
+    for (int i = 0; i < (int)pageRequests.size(); i++) {
+        int page = pageRequests[i];
+
+        //check if page is already in frames
+        if (find(frames.begin(), frames.end(), page) == frames.end()) {
+            pageFaults++;
+
+            int frameIndex = -1;//to store which frame this page goes into
+
+            //if all frames are full remove the least recently used page
+            if (count_if(frames.begin(), frames.end(), [](int f){ return f != -1; }) == totalFrames) {
+                int lruPage = -1;//the page that will be replaced must be initailised to -1
+                int minUse = i;
+                for (int f : frames) {
+                    if (lastUsed[f] < minUse) {//if this page was used earlier than the current one it shuld be updated
+                        minUse = lastUsed[f];
+                        lruPage = f;//now becomes the least recently used page
+                    }
+                }
+                //using the find function to look for the page we want to remove inside the frames vector
+                auto it = find(frames.begin(), frames.end(), lruPage);
+                //check if we actually found the page 
+                //find returns frames.end() if it didn't find it
+                if (it != frames.end()) {
+                    //calculating the index of the page frame where the page was
+                    frameIndex = distance(frames.begin(), it);
+                    *it = page;
+                }
+            } else {//if there are empty frames find where the empty frames are
+                auto it = find(frames.begin(), frames.end(), -1);
+                if (it != frames.end()) {//if there is an empty frame place the page there 
+                    frameIndex = distance(frames.begin(), it);
+                    *it = page;
+                }
+            }
+
+            int physicalAddress = frameIndex * pageSize; //address resolution for this page
+            cout << "Page " << page << " caused a page fault\n";
+            cout << "Now it is in memory at this starting address: " << physicalAddress << endl;
+        } else {
+            cout << "Page " << page << " found in memory---> HIT!\n";
+        }
+
+        lastUsed[page] = i;
+
+        displayFrames(frames);
+    }
+
+    //update page map table for the job
+    for (auto& p : job.pages) {
+        auto it = find(frames.begin(), frames.end(), p.pageNumber);
+        if (it != frames.end()) {
+            p.valid = true;
+            p.frameNumber = distance(frames.begin(), it);
+        } else {
+            p.valid = false;
+            p.frameNumber = -1;
+        }
+    }
+
+    cout << "\nTotal page faults using LRU " << pageFaults << endl;
+}
+
+int main() {
+    cout << "_*_*_ DEMAND PAGING SIMULATOR _*_*_\n";
+
+    int jobCounter = 1; 
+    bool addAnother = true; //indicator that controls if user wants to add another job and repeats the loop
+
+    while (addAnother) {
+        Job job; //creating a job instance
+        job.jobId = jobCounter++;
+
+        cout << "\nEnter Job Name: ";
+        cin >> job.jobName;
+
+        cout << "Enter Job Size : ";
+        cin >> job.jobSize;
+
+        int pageSize;
+        cout << "Enter Page Size : ";
+        cin >> pageSize;
+
+        job.numPages = (job.jobSize + pageSize - 1) / pageSize;
+        job.pages.resize(job.numPages);
+
+        for (int i = 0; i < job.numPages; i++) {
+            job.pages[i] = {i, false, -1}; //each page starts as not in memory where the pagefram is -1 
+        }
+
+        cout << "\nJob " << job.jobName << " divided into " << job.numPages << " pages.\n";
+
+        int totalFrames;
+        cout << "Enter number of frames available in memory: ";
+        cin >> totalFrames;
+
+        int numRequests;
+        cout << "Enter number of page requests: ";
+        cin >> numRequests;
+
+        vector<int> pageRequests(numRequests);
+        cout << "Enter the sequence of page requests (EXAMPLE 1 7 9 0 1): ";
+        for (int i = 0; i < numRequests; i++)
+            cin >> pageRequests[i];
+
+        cout << "\nChoose Replacement Algorithm:\n1. FIFO\n2. LRU\n> ";
+        int choice;
+        cin >> choice;
+
+        if (choice == 1)
+            simulateFIFO(job, totalFrames, pageRequests, pageSize);
+        else if (choice == 2)
+            simulateLRU(job, totalFrames, pageRequests, pageSize);
+        else
+            cout << "Invalid choice.\n";
+
+        char response;
+        cout << "\nWould you like to simulate another job? (y/n): ";
+        cin >> response;
+        addAnother = (response == 'y' || response == 'Y');
+    }
+
+    cout << "\nSimulation Complete. All jobs have been processed.\n";
+    return 0;
+}
